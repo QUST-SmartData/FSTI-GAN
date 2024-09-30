@@ -1,15 +1,16 @@
-# StructureFlow
-Code for our paper "[StructureFlow: Image Inpainting via Structure-aware Appearance Flow](https://arxiv.org/abs/1908.03852)" (ICCV 2019)
+# FSTI-GAN
+Code for our paper "[FSTI-GAN: Fusion of Structural and Textural Information (FSTI) in Generative Adversarial Network (GAN) to Improve Medical Image Inpainting]" (Submitted 2024)
 
 ### Introduction
 
-We propose a two-stage image inpainting network which splits the task into two parts: **structure reconstruction** and **texture generation**. In the ﬁrst stage, edge-preserved smooth images are employed to train a structure reconstructor which completes the missing structures of the inputs. In the second stage, based on the reconstructed structures, a texture generator using appearance ﬂow is designed to yield image details. 
+The model combines the concept of two-stage and parallel structure image inpainting. Initially, the inpainting task is divided into two tasks: **structure reconstruction** and **texture reconstruction**. The structure images are obtained by the edge-preserved smooth method, and the texture images are obtained by the Local Binary Pattern (LBP). However, obtaining reasonable structure and fine texture remains an extremely challenging task. In the subsequent **inpainting process**, **poor structural and textural information** is bound to seriously mislead the inpainted results. Aiming at this problem, we improved the structure of the feature reconstruction model and obtained better prediction results of unknown regions. Furthermore, to tackle the problem of adaptive fusion of multiple features, we proposed a novel parallel embedding network with a two-stream architecture. By stacking multiple FSTI Block in it, the network can maintain the global consistency of structure and texture information during the inpainting process while enhancing the model's reasoning capabilities regarding contextual information. The bidirectional interaction between structure-guided texture synthesis and texture-facilitated structure reconstruction is realized, ultimately leading to an improvement in inpainting quality.
 
 <p align='center'>  
-  <img src='https://user-images.githubusercontent.com/30292465/62820141-8e634300-bb92-11e9-9895-570f020edc47.png' width='500'/>
+  <img src='./readmetools/Figure2.4.jpg' width='500'/>
 </p>
-
-*(From left to right) Input corrupted images, reconstructed structure images, visualizations of the appearance ﬂow ﬁelds, ﬁnal output images. To visualize the appearance ﬂow ﬁelds, we plot the sample points of some typical missing regions. The arrows show the direction of the appearance ﬂow.*
+<p align='center'> 
+<img src='./readmetools/Figure3.1.jpg' width='635'/><img src='./readmetools/Figure5.1.jpg' width='250'/>
+</p>
 
 ### Requirements
 
@@ -21,17 +22,10 @@ We propose a two-stage image inpainting network which splits the task into two p
 
 ### Installation
 
-1. Clone this repository
+Clone this repository
 
    ```bash
-   git clone https://github.com/RenYurui/StructureFlow
-   ```
-
-2. Build Gaussian Sampling CUDA package 
-
-   ```bash
-   cd ./StructureFlow/resample2d_package
-   python setup.py install --user
+   git clone https://github.com/QUST-SmartData/FSTI-GAN
    ```
 
 
@@ -39,17 +33,16 @@ We propose a two-stage image inpainting network which splits the task into two p
 
 **1.	Image Prepare**
 
-We train our model on three public datasets including Places2, Celeba, and Paris StreetView. We use the irregular mask dataset provided by [PConv](https://arxiv.org/abs/1804.07723). You can download these datasets from their project website.
+We train our model on three public datasets including CHAOS, and DeepLesion. We use the irregular mask dataset provided by [PConv](https://arxiv.org/abs/1804.07723). You can download these datasets from their project website.
 
-1. [Places2](http://places2.csail.mit.edu)
-2. [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) 
-3. [Paris Street-View](https://github.com/pathak22/context-encoder) 
-4. [Irregular Masks](http://masc.cs.gmu.edu/wiki/partialconv)
+1. [CHAOS](https://zenodo.org/records/3431873#.Yl_9itpBxaQ)
+2. [DeepLesion](https://nihcc.app.box.com/v/DeepLesion)
+3. [Irregular Masks](http://masc.cs.gmu.edu/wiki/partialconv)
 
-After downloading the datasets, The edge-preserved smooth images can be obtained by using [RTV smooth method](http://www.cse.cuhk.edu.hk/~leojia/projects/texturesep/). Run generation function [`scripts/matlab/generate_structre_images.m`](scripts/matlab/generate_structure_images.m) in your matlab. For example, if you want to generate smooth images for Places2, you can run the following code:
+After downloading the datasets, The edge-preserved smooth images can be obtained by using [RTV smooth method](http://www.cse.cuhk.edu.hk/~leojia/projects/texturesep/). Run generation function [`scripts/matlab/generate_structre_images.m`](scripts/matlab/generate_structure_images.m) in your matlab. For example, if you want to generate smooth images for CHAOS, you can run the following code:
 
 ```matlab
-generate_structure_images("path to Places2 dataset root", "path to output folder");
+generate_structure_images("path to CHAOS dataset root", "path to output folder");
 ```
 
 Finally, you can generate the image list using script  [`scripts/flist.py`](scripts/flist.py) for training and testing.
@@ -75,6 +68,7 @@ python test.py \
 --input=[input images] \
 --mask=[mask images] \
 --structure=[structure images] \
+--texture=[texture images] \
 --output=[path to save the output images] \
 --model=[which model to be tested]
 ```
@@ -88,19 +82,16 @@ python ./scripts/metrics.py \
 --fid_real_path=[path to the real images using to calculate fid]
 ```
 
-**The pre-trained weights can be downloaded from [Places2](https://drive.google.com/open?id=1K7U6fYthC4Acsx0GBde5iszHJWymyv1A), [Celeba](https://drive.google.com/open?id=1PrLgcEd964etxZcHIOE93uUONB9-b6pI), [Paris Street](https://drive.google.com/open?id=18AQpgsYZtA_eL-aJb6n8-geWLdihwXAi).**
-
-Download the checkpoints and save them to './path_of_your_experiments/name_of_your_experiment/checkpoints'
-
-For example you can download the checkpoints of Places2 and save them to './results/places/checkpoints' and run the following code:
+For example you can download the checkpoints of CHAOS and save them to './results/places/checkpoints' and run the following code:
 
 ```bash
 python test.py \
 --name=places \
 --path=results \
---input=./example/places/1.jpg \
---mask=./example/places/1_mask.png \
---structure=./example/places/1_tsmooth.png \
+--input=./example/CHAOS/1.jpg \
+--mask=./example/CHAOS/1_mask.png \
+--structure=./example/CHAOS/1_tsmooth.png \
+--texture=./example/CHAOS/1_tsmooth.png \
 --output=./result_images \
 --model=3
 ```
@@ -110,16 +101,11 @@ python test.py \
 If you find this code is helpful for your research, please cite our paper:
 
 ```
-@inproceedings{ren2019structureflow,
-      author = {Ren, Yurui and Yu, Xiaoming and Zhang, Ruonan and Li, Thomas H. and Liu, Shan and Li, Ge},
-      title = {StructureFlow: Image Inpainting via Structure-aware Appearance Flow},
-      booktitle={IEEE International Conference on Computer Vision (ICCV)},
-      year = {2019}
-}
+Submitted
 ```
 
 
 
 ### Acknowledgements
 
-We built our code based on [Edge-Connect](https://github.com/knazeri/edge-connect). Part of the code were derived from [FlowNet2](https://github.com/NVIDIA/flownet2-pytorch). Please consider to cite their papers. 
+We built our code based on [StructureFlow](https://github.com/RenYurui/StructureFlow)、[AOT-GAN](https://github.com/researchmm/AOT-GAN-for-Inpainting)、[Edge-Connect](https://github.com/knazeri/edge-connect) and [LBP](https://github.com/HighwayWu/ImageInpainting). Part of the code were derived from [FlowNet2](https://github.com/NVIDIA/flownet2-pytorch). Please consider to cite their papers. 
