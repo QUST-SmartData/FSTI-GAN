@@ -1,5 +1,5 @@
 # FSTI-GAN
-Code for our paper "[FSTI-GAN: Fusion of Structural and Textural Information (FSTI) in Generative Adversarial Network (GAN) to Improve Medical Image Inpainting]" (Submitted 2024)
+Code for our paper "FSTI-GAN: Fusion of Structural and Textural Information (FSTI) in Generative Adversarial Network (GAN) to Improve Medical Image Inpainting" (Submitted 2024)
 
 ### Introduction
 
