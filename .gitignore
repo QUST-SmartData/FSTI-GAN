@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.idea/
+.venv/
+datasets/
+results/
+*.pth
+*.pt
+*.ckpt
+.env

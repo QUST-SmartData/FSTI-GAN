@@ -42,8 +42,12 @@ class Discriminator(nn.Module):
         self.model.append(Conv2dBlock(dim_in, 1, 1, 1, activation='none', use_bias=False, use_sn=use_sn))
         self.model = nn.Sequential(*self.model)
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, return_features=False):
+        features = []
+        for layer in self.model:
+            x = layer(x)
+            features.append(x)
+        return (x, features[:-1]) if return_features else x
 
 
 class MultiDiscriminator(nn.Module):
@@ -53,10 +57,12 @@ class MultiDiscriminator(nn.Module):
         self.down = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
         self.model_2 = Discriminator(**parameter_dic)
 
-    def forward(self, x):
-        pre1 = self.model_1(x)
-        pre2 = self.model_2(self.down(x))
-        return [pre1, pre2]
+    def forward(self, x, return_features=False):
+        if return_features:
+            pre1, f1 = self.model_1(x, True)
+            pre2, f2 = self.model_2(self.down(x), True)
+            return [pre1, pre2], f1 + f2
+        return [self.model_1(x), self.model_2(self.down(x))]
 
 
 class StructureGen(nn.Module):
@@ -117,13 +123,13 @@ class StructureGen(nn.Module):
 
 class InpaintingGen(nn.Module):
     def __init__(self, input_dim=3, dim=64, n_res=2, activ='relu',
-                 norm_flow='ln', norm_conv='in', pad_type='reflect', use_sn=True):
+                 norm_flow='ln', norm_conv='in', pad_type='reflect', use_sn=True, fst_blocks=8):
         super(InpaintingGen, self).__init__()
 
         self.lbp_column = LbpColumn(input_dim, dim, n_res, activ,
                                     norm_flow, pad_type, use_sn)
         self.conv_column = ConvColumn(input_dim, dim, n_res, activ,
-                                      norm_conv, pad_type, use_sn)
+                                      norm_conv, pad_type, use_sn, fst_blocks)
 
     def forward(self, inputs, rtv_maps, lbp_maps):
         # print('inputs_size', inputs.size())
@@ -202,7 +208,7 @@ class TextureGen(nn.Module):
         self.content_param = nn.ModuleList()
 
         # 使用GatedConv2dWithActivation替换Conv2dBlock
-        self.input_layer = GConv(input_dim * 2 + 1, dim, 5, 1, 2)
+        self.input_layer = GConv(input_dim + 2, dim, 5, 1, 2)
         self.down_sample += [nn.Sequential(
             GDownsamplingBlock(dim, 2 * dim))]
 
@@ -252,7 +258,7 @@ class TextureGen(nn.Module):
 
 class ConvColumn(nn.Module):
     def __init__(self, input_dim=3, dim=64, n_res=2, activ='lrelu',
-                 norm='ln', pad_type='reflect', use_sn=True):
+                 norm='ln', pad_type='reflect', use_sn=True, fst_blocks=8):
         super(ConvColumn, self).__init__()
 
         self.down_sample = nn.ModuleList()
@@ -286,7 +292,7 @@ class ConvColumn(nn.Module):
             Conv2dBlock(2 * dim, 4 * dim, 5, 1, 2, norm, activ, pad_type, use_sn=use_sn))]
             # Conv2dBlock(4 * dim, 8 * dim, 4, 2, 1, norm, activ, pad_type, use_sn=use_sn))]
 
-        self.middle += nn.Sequential(*[FSTBlock(256, [1, 2, 4, 8]) for _ in range(8)])
+        self.middle += nn.Sequential(*[FSTBlock(256, [1, 2, 4, 8]) for _ in range(fst_blocks)])
 
         dim = 8 * dim
 
@@ -319,7 +325,9 @@ class ConvColumn(nn.Module):
         r2 = self.down_sample[1](r1)
         l1 = self.down_sample_lbp[0](lbp_maps)
         l2 = self.down_sample[1](l1)
-        x3 = self.middle[0](x2, r2, l2)
+        x3 = x2
+        for block in self.middle:
+            x3 = block(x3, r2, l2)
         """x3:256 lbp_maps:2"""
         lbp_fea = self.resample_image(x1, lbp_map)
         # print('x2.size()=', x2.size())

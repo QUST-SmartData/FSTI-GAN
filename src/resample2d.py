@@ -1,12 +1,17 @@
 import torch
 from torch.nn.modules.module import Module
 from torch.autograd import Function, Variable
-import resample2d_cuda
+try:
+    import resample2d_cuda
+except ImportError:
+    resample2d_cuda = None
 
 class Resample2dFunction(Function):
 
     @staticmethod
     def forward(ctx, input1, input2, kernel_size=2, dilation=1):
+        if resample2d_cuda is None:
+            raise RuntimeError('Build the original resample2d_cuda extension before using the fusion sampler.')
         assert input1.is_contiguous()
         assert input2.is_contiguous()
 
@@ -25,7 +30,7 @@ class Resample2dFunction(Function):
     @staticmethod
     def backward(ctx, grad_output):
         if not grad_output.is_contiguous():
-            grad_output.contiguous()
+            grad_output = grad_output.contiguous()
 
         input1, input2 = ctx.saved_tensors
 
@@ -44,10 +49,10 @@ class Resample2d(Module):
         super(Resample2d, self).__init__()
         self.kernel_size = kernel_size
         self.dilation = dilation
-        self.sigma = torch.tensor(sigma, dtype=torch.float).cuda()
+        self.register_buffer('sigma', torch.tensor(sigma, dtype=torch.float))
 
     def forward(self, input1, input2):
         input1_c = input1.contiguous()
-        sigma = self.sigma.expand(input2.size(0), 1, input2.size(2), input2.size(3)).type(input2.dtype)
+        sigma = self.sigma.expand(input2.size(0), 1, input2.size(2), input2.size(3)).to(device=input2.device, dtype=input2.dtype)
         input2 = torch.cat((input2,sigma), 1)
         return Resample2dFunction.apply(input1_c, input2, self.kernel_size, self.dilation)

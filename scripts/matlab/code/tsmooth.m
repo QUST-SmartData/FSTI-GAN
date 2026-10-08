@@ -36,16 +36,16 @@ function S = tsmooth(I,lambda,sigma,sharpness,maxIter,mask)
 % 
 
     if (~exist('lambda','var'))
-       lambda=0.01;
+       lambda=0.015;
     end   
     if (~exist('sigma','var'))
        sigma=3.0;
     end 
     if (~exist('sharpness','var'))
-        sharpness = 0.02;
+        sharpness = 0.001;
     end
     if (~exist('maxIter','var'))
-       maxIter=4;
+       maxIter=30;
     end    
     if (~exist('mask','var'))
        [w,h,~] = size(I);

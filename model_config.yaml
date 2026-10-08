@@ -3,11 +3,11 @@ VERBOSE: 1                    # turns on verbose mode in the output console
 GPU: [0]                      # gpu ids 
 
 
-MAX_ITERS: 8e6                # maximum number of iterations to train the model
+MAX_ITERS: 610000  # formal optimizer-update budget; no epoch stopping
 LR: 0.0001                    # learning rate
 BETA1: 0                      # adam optimizer beta1
 BETA2: 0.999                  # adam optimizer beta2
-LR_POLICY: constant           # the method to adjust learning rate (eg: constant|step)
+LR_POLICY: cosine  # cosine annealing over the stage update budget
 STEP_SIZE: 100000             # Period of learning rate decay (only used when choosing "step" as the lr adjusment method)
 GAMMA: 0.5                    # Multiplicative factor of learning rate decay. (only used when choosing "step" as the lr adjusment method)
 INIT_TYPE: xavier             # initialization [gaussian/kaiming/xavier/orthogonal]
@@ -20,21 +20,21 @@ EVAL_INTERVAL: 10000          # how many iterations to wait before model evaluat
 LOG_INTERVAL: 100             # how many iterations to wait before logging training status 
 WHICH_ITER: latest            # which iterations to load
 
-DIS_GAN_LOSS: lsgan           # type of gan loss 
+DIS_GAN_LOSS: smgan  # manuscript soft-mask least-squares loss
 
 STRUCTURE_L1: 4               # structure net parameter of l1 loss  
 STRUCTURE_ADV_GEN: 1          # structure net parameter of gan loss  
 
-FLOW_ADV_GEN: 0.05               # texture net parameter of gan loss  
-FLOW_L1: 10                    # texture net parameter of l1 loss  
+FLOW_ADV_GEN: 0.1
+FLOW_L1: 1
 FLOW_CORRECTNESS: 0.25        # texture net parameter of sampling correctness loss  
 VGG_STYLE: 250                # texture net parameter of vgg_style loss (Optional loss on stage_3)  
 VGG_CONTENT: 0.1              # texture net parameter of vgg_content loss (Optional loss on stage_3) 
 
 
-TRAIN_BATCH_SIZE: 8           # batch size
+TRAIN_BATCH_SIZE: 16
 DATA_TRAIN_SIZE: 256          # image size for training 
-DATA_TEST_SIZE: False         # image size for testing (False for never resize)
+DATA_TEST_SIZE: 256  # mask ratios computed after final image processing
 DATA_FLIP: False              # filp image or not when training 
 DATA_CROP: FALSE #[537,537]   # crop size when training (False for never cro)
 DATA_MASK_TYPE: from_file     # mask type (random_bbox|random_free_form|from_file)
@@ -51,11 +51,32 @@ DATA_RANDOM_FF_SETTING:       # parameters for random_free_form
 DATA_MASK_FILE:  ./datasets/mask #parameters for from_file
 
 # use places365 dataset
-DATA_TRAIN_GT: F:\Dataset\DeepLesionTrain
-DATA_TRAIN_STRUCTURE: F:\Program\M_LBP1\datasets\DeepLesion_Train
-DATA_VAL_GT: F:\Dataset\DeepLesionVal
-DATA_VAL_STRUCTURE: F:\Program\M_LBP1\datasets\DeepLesion_Val
-DATA_VAL_MASK: F:\Program\M_LBP1\datasets\mask
+DATA_TRAIN_GT: ./datasets/data_train_gt
+DATA_TRAIN_STRUCTURE: ./datasets/data_train_structure
+DATA_VAL_GT: ./datasets/data_val_gt
+DATA_VAL_STRUCTURE: ./datasets/data_val_structure
+DATA_VAL_MASK: ./datasets/data_val_mask
 
 
 
+
+TEST_BATCH_SIZE: 16
+FSTI_BLOCKS: 8
+TR_MULTILEVEL: 0.01
+TR_RECON: 0.2
+TR_ADV_GEN: 100
+USE_CORRECTION_LOSS: false
+RTV_SOURCE: "online"
+RTV_LAMBDA: 0.015
+RTV_SIGMA: 3
+RTV_ITERATIONS: 30
+CT_WINDOW_WIDTH: 400
+CT_WINDOW_LEVEL: 40
+SEED: 12
+INDEPENDENT_SEEDS: [12, 42, 88, 123, 2026]
+EVAL_MASK_SEED: 0
+SR_CHECKPOINT: null
+TR_CHECKPOINT: null
+RADIMAGENET_WEIGHTS: null
+
+# 8,000,000 was a historical ceiling; formal budgets are 610,000/610,000/4,000,000.

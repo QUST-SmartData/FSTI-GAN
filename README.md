@@ -109,3 +109,20 @@ Submitted
 ### Acknowledgements
 
 We built our code based on [StructureFlow](https://github.com/RenYurui/StructureFlow)、[AOT-GAN](https://github.com/researchmm/AOT-GAN-for-Inpainting)、[Edge-Connect](https://github.com/knazeri/edge-connect) and [LBP](https://github.com/HighwayWu/ImageInpainting). Part of the code were derived from [FlowNet2](https://github.com/NVIDIA/flownet2-pytorch). Please consider to cite their papers. 
+
+
+## Revised manuscript implementation
+
+Repository: https://github.com/QUST-SmartData/FSTI-GAN
+
+The effective training entry point uses `src/models_last.py` and `src/paper_networks.py`. The paper-aligned model uses eight FSTI blocks and the single-scale soft-mask discriminator. Stage configurations are `model_config_stage1.yaml`, `model_config_stage2.yaml` and `model_config_stage3.yaml`. Set dataset and completed prior checkpoint paths in these files.
+
+Training uses batch size 16, Adam (learning rate 1e-4, beta1=0, beta2=0.999), and cosine annealing over each stage's update budget. SR-Net and TR-Net each use 610,000 updates; FSTI-Net uses 4,000,000 updates with fixed completed prior networks. Independent seeds are 12, 42, 88, 123 and 2026. See `scripts/train_five_seeds.py` for independent runs.
+
+The preprocessing includes CT window width/level 400/40 HU, foreground MRI normalization, RTV (lambda=0.015, sigma=3, 30 iterations), and ImageNet normalization for VGG inputs. See `src/medical_preprocessing.py`.
+
+`utils/mask_group_split.py` bins processed missing-pixel ratios into [1%,10%), [10%,20%), [20%,30%), [30%,40%), [40%,50%), [50%,60%]. Example: `python utils/mask_group_split.py --masks MASKS --output groups.csv --size 256`.
+
+Pixel evaluation uses continuous raw network predictions in [0,1]. L1 percentages in the main result tables use this range. The newly supplied component experiments report raw L1 in [-1,1]; conversion between ranges scales absolute error by two. `scripts/evaluate_rad.py` provides masked SSIM/PSNR and RadImageNet feature evaluation; `scripts/summarize_five_runs.py --independent-mask-bins` aggregates complete runs separately. Configure a local RadImageNet checkpoint for feature extraction. Dataset-level Rad-FID uses feature distributions, and paired comparisons use per-image 2048-dimensional feature L2 distances.
+
+The source update implements the stated architecture and evaluation protocol. Reported manuscript experiment tables are supplied by the authors and are documented separately from this code release.

@@ -1,4 +1,4 @@
-MODEL: 3                      # 1: structure model, 2: inpaint model, 3: structure-inpaint model
+MODEL: 3
 VERBOSE: 1                    # turns on verbose mode in the output console
 GPU: [0]                      # gpu ids 
 
@@ -12,9 +12,9 @@ STEP_SIZE: 100000             # Period of learning rate decay (only used when ch
 GAMMA: 0.5                    # Multiplicative factor of learning rate decay. (only used when choosing "step" as the lr adjusment method)
 INIT_TYPE: xavier             # initialization [gaussian/kaiming/xavier/orthogonal]
 
-SAVE_INTERVAL: 10000          # how many iterations to wait before saving model 
+SAVE_INTERVAL: 1000          # how many iterations to wait before saving model 
 SAVE_LATEST: 1000             # how many iterations to wait before saving lastest model 
-SAMPLE_INTERVAL: 1000         # how many iterations to wait before sampling 
+SAMPLE_INTERVAL: 50         # how many iterations to wait before sampling 
 SAMPLE_SIZE: 4                # number of images to sample
 EVAL_INTERVAL: 10000          # how many iterations to wait before model evaluation 
 LOG_INTERVAL: 100             # how many iterations to wait before logging training status 
@@ -48,7 +48,7 @@ DATA_RANDOM_FF_SETTING:       # parameters for random_free_form
   ma: 4.0
   ml: 40
   mbw: 10
-DATA_MASK_FILE: ./datasets/data_mask_file
+DATA_MASK_FILE:  ./datasets/mask #parameters for from_file
 
 # use places365 dataset
 DATA_TRAIN_GT: ./datasets/data_train_gt

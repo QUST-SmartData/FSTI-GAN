@@ -1,11 +1,11 @@
 function generate_structure_images(dataset_path, output_path)
-    addpath('code');
+    addpath(fullfile(fileparts(mfilename('fullpath')), 'code'));
     image_list = dirPlus(dataset_path, 'FileFilter', '\.(jpg|png|tif)$');
     num_image = numel(image_list);
-    for i=0:num_image
+    for i=1:num_image
        image_name = image_list{i};
        image = im2double(imread(image_name));
-       S = tsmooth(image, 0.015, 3, 0.001, 3);
+       S = tsmooth(image, 0.015, 3, 0.001, 30);
        write_name = strrep(image_name, dataset_path, output_path);
        [filepath,~,~] = fileparts(write_name);
        if ~exist(filepath, 'dir')

@@ -17,7 +17,7 @@ class BaseModel(nn.Module):
     def save(self, which_epoch):
         """Save all the networks to the disk"""
         for net_name in self.net_name:
-            if hasattr(self, net_name) and not(self.config.MODEL == 3 and 's_' in net_name):
+            if hasattr(self, net_name):
                 sub_net = getattr(self, net_name)
                 save_filename = '%s_net_%s.pth' % (which_epoch, net_name)
                 save_path = os.path.join(self.checkpoints_path, save_filename)
@@ -31,8 +31,7 @@ class BaseModel(nn.Module):
                 filename = '%s_net_%s.pth' % (which_epoch, net_name)
                 model_name = os.path.join(self.checkpoints_path, filename)
                 if not os.path.isfile(model_name):
-                    print('checkpoint %s do not exist'%model_name)
-                    continue                
+                    raise FileNotFoundError('Required checkpoint does not exist: ' + model_name)                
                 self.load_networks(model_name, sub_net, net_name)
                 self.iterations = get_iteration(self.checkpoints_path, filename, net_name)
                 print('Resume %s from iteration %s' % (net_name, which_epoch))
@@ -44,26 +43,9 @@ class BaseModel(nn.Module):
     def load_networks(self, path, net, name):
         """Load all the networks from the disk"""
         try:
-            net.load_state_dict(torch.load(path))
-        except:
-            pretrained_dict = torch.load(path)
-            model_dict = net.state_dict()
-            try:
-                pretrained_dict = {k:v for k,v in pretrained_dict.items() if k in model_dict}
-                net.load_state_dict(pretrained_dict)
-                print('Pretrained network %s has excessive layers; Only loading layers that are used' % name)
-            except:
-                print('Pretrained network %s has fewer layers; The following are not initialized:' % name)
-                not_initialized = set()
-                for k, v in pretrained_dict.items():
-                    if v.size() == model_dict[k].size():
-                        model_dict[k] = v
-
-                for k, v in model_dict.items():
-                    if k not in pretrained_dict or v.size() != pretrained_dict[k].size():
-                        not_initialized.add(k)
-                print(sorted(not_initialized))
-                net.load_state_dict(model_dict)
+            net.load_state_dict(torch.load(path, map_location='cpu', weights_only=True), strict=True)
+        except Exception as error:
+            raise RuntimeError('Checkpoint must match the configured architecture: ' + str(path)) from error
 
 
     def init(self):
@@ -89,8 +71,10 @@ class BaseModel(nn.Module):
         elif self.config.LR_POLICY == 'step':
             scheduler = lr_scheduler.StepLR(optimizer, step_size=self.config.STEP_SIZE,
                                             gamma=self.config.GAMMA, last_epoch = self.iterations-1)
+        elif self.config.LR_POLICY == 'cosine':
+            scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.config.MAX_ITERS), eta_min=0.0)
         else:
-            return NotImplementedError('learning rate policy [%s] is not implemented', self.config.LR_POLICY)
+            raise NotImplementedError('learning rate policy [%s] is not implemented', self.config.LR_POLICY)
         return scheduler
 
 

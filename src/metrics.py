@@ -30,6 +30,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 import torch
 import numpy as np
 from imageio.v2 import imread
+from PIL import Image
 from scipy import linalg
 from torch.autograd import Variable
 from torch.nn.functional import adaptive_avg_pool2d
@@ -43,7 +44,7 @@ class FID():
     def __init__(self):
         self.dims = 2048
         self.batch_size = 64
-        self.cuda = True
+        self.cuda = torch.cuda.is_available()
 
 
 
@@ -70,14 +71,14 @@ class FID():
 
     def compute_statistics_of_path(self, path):
         npz_file = os.path.join(path, 'statistics.npz')
-        if os.path.exists(npz_file):
+        if False:  # Unversioned historical cache is intentionally not reused.
             f = np.load(npz_file)
             m, s = f['mu'][:], f['sigma'][:]
             f.close()
         else:
             path = pathlib.Path(path)
             files = list(path.glob('*.jpg')) + list(path.glob('*.png'))
-            imgs = np.array([imread(str(fn)).astype(np.float32) for fn in files])
+            imgs = np.array([np.asarray(Image.open(fn).convert('RGB'), dtype=np.float32) for fn in files])
 
             # Bring images to shape (B, 3, H, W)
             imgs = imgs.transpose((0, 3, 1, 2))
@@ -142,8 +143,10 @@ class FID():
                    'Setting batch size to data size'))
             self.batch_size = d0
 
-        n_batches = d0 // self.batch_size
-        n_used_imgs = n_batches * self.batch_size
+        if d0 == 0:
+            raise ValueError('FID requires a nonempty complete image set.')
+        n_batches = (d0 + self.batch_size - 1) // self.batch_size
+        n_used_imgs = d0
 
         pred_arr = np.empty((n_used_imgs, self.dims))
         for i in range(n_batches):
@@ -151,7 +154,7 @@ class FID():
                 print('\rPropagating batch %d/%d' % (i + 1, n_batches),
                       end='', flush=True)
             start = i * self.batch_size
-            end = start + self.batch_size
+            end = min(start + self.batch_size, d0)
 
             batch = torch.from_numpy(images[start:end]).type(torch.FloatTensor)
             # batch = Variable(batch, volatile=True)
@@ -165,7 +168,7 @@ class FID():
             if pred.shape[2] != 1 or pred.shape[3] != 1:
                 pred = adaptive_avg_pool2d(pred, output_size=(1, 1))
 
-            pred_arr[start:end] = pred.cpu().data.numpy().reshape(self.batch_size, -1)
+            pred_arr[start:end] = pred.cpu().data.numpy().reshape(end - start, -1)
 
         if verbose:
             print(' done')

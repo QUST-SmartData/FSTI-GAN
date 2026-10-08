@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
-from .resample2d import Resample2d
 
 from .utils import write_2images
 
@@ -117,6 +116,7 @@ class PerceptualCorrectness(nn.Module):
         self.add_module('vgg', VGG19())
         self.layer = layer  
         self.eps=1e-8 
+        from .resample2d import Resample2d  # historical optional loss only
         self.resample = Resample2d(4, 1, sigma=2)
 
     def __call__(self, gts, inputs, flow, maps):
@@ -151,9 +151,12 @@ class PerceptualCorrectness(nn.Module):
 
 
 class VGG19(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, input_range="zero_one"):
         super(VGG19, self).__init__()
-        features = models.vgg19(pretrained=True).features
+        self.input_range = input_range
+        self.register_buffer('rgb_mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('rgb_std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        features = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
         self.relu1_1 = torch.nn.Sequential()
         self.relu1_2 = torch.nn.Sequential()
 
@@ -228,6 +231,13 @@ class VGG19(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, x):
+        if self.input_range == 'minus_one_one':
+            x = (x + 1) / 2
+        elif self.input_range != 'zero_one':
+            raise ValueError('Unknown VGG input range')
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        x = (x - self.rgb_mean) / self.rgb_std
         relu1_1 = self.relu1_1(x)
         relu1_2 = self.relu1_2(relu1_1)
 

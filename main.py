@@ -1,6 +1,9 @@
 import os
 import torch
 import argparse
+import random
+import numpy as np
+import yaml
 import shutil 
 from src.config import Config
 from src.texture_flow import TextureFlow
@@ -13,11 +16,18 @@ def main(mode=None):
 
     config = load_config(mode)
     config.MODE = mode
-    os.environ['CUDA_VISIBLE_DEVICES'] = ''.join(str(e) for e in config.GPU)
+    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(e) for e in config.GPU)
 
+    seed = int(config.SEED or 12)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
         config.DEVICE = torch.device("cuda")
-        torch.backends.cudnn.benchmark = True   # cudnn auto-tuner
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        #   # cudnn auto-tuner
     else:
         config.DEVICE = torch.device("cpu")
 
@@ -41,7 +51,7 @@ def load_config(mode=None):
     r"""loads model config 
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, help='output model name.')
+    parser.add_argument('--name', type=str, default='fstigan', help='output model name.')
     parser.add_argument('--config', type=str, default='model_config.yaml', help='Path to the config file.')
     parser.add_argument('--path', type=str, default='./results', help='outputs path')
     parser.add_argument("--resume_all", action="store_true", help='load model from checkpoints')
@@ -55,6 +65,9 @@ def load_config(mode=None):
         parser.add_argument('--output', type=str, help='path to the output directory')
         parser.add_argument('--model', type=int, default=1, help='which model to test')
     
+    parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--sr-checkpoint', type=str, default=None)
+    parser.add_argument('--tr-checkpoint', type=str, default=None)
     opts = parser.parse_args()
     config = Config(opts, mode)
     output_dir = os.path.join(opts.path, opts.name)
@@ -62,7 +75,8 @@ def load_config(mode=None):
 
     if mode == 'train':
         config_dir = os.path.join(output_dir, 'config.yaml')
-        shutil.copyfile(opts.config, config_dir)
+        with open(config_dir, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(config._dict, f, sort_keys=False, allow_unicode=True)
     return config
 
 

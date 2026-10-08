@@ -3,7 +3,7 @@ import yaml
 
 class Config(dict):
     def __init__(self, opts, mode):
-        with open(opts.config, 'r') as f:
+        with open(opts.config, 'r', encoding='utf-8-sig') as f:
             self._yaml = f.read()
             self._dict = yaml.safe_load(self._yaml)
 
@@ -28,6 +28,10 @@ class Config(dict):
         self._dict['PATH'] = opts.path
         self._dict['NAME'] = opts.name
         self._dict['RESUME_ALL'] = opts.resume_all
+        self._dict['REMOVE_LOG'] = opts.remove_log
+        for key, value in [('SEED', opts.seed), ('SR_CHECKPOINT', opts.sr_checkpoint), ('TR_CHECKPOINT', opts.tr_checkpoint)]:
+            if value is not None:
+                self._dict[key] = value
 
         if mode == 'test':
             self._dict['DATA_TEST_GT'] = opts.input

@@ -271,8 +271,7 @@ def get_iteration(dir_name, file_name, net_name):
     return iterations
 
 def __denorm(x):
-    x = (x + 1) / 2
-    return x.clamp_(0, 1)
+    return x.clamp(0, 1)
 
 
 def __write_images(image_outputs, display_image_num, file_name):

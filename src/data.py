@@ -14,34 +14,42 @@ import math
 import scipy.io as scio
 import torch.utils.data as data
 from PIL import Image
+from pathlib import Path
 from torch.utils.data import DataLoader
 import cv2
 from imageio.v2 import imread
 from skimage.color import rgb2gray, gray2rgb
 from torchvision.transforms import ToTensor
+from .medical_preprocessing import load_medical_image, read_manifest, rtv_structure
+from torchvision.transforms import InterpolationMode
+from utils.mask_group_split import group_mask
 
 
 ## TODO: choose with or without transformation at test mode
 class Dataset(data.Dataset):
-    def __init__(self, gt_file, structure_file, config, mask_file=None):
+    def __init__(self, gt_file, structure_file, config, mask_file=None, evaluation=False):
+        self.config = config
+        self.evaluation = evaluation or config.MODE in ("test", "eval")
         self.gt_image_files = self.load_file_list(gt_file)
         self.structure_image_files = self.load_file_list(structure_file)
         self.model = config.MODEL
+        self._evaluation_indices = None
 
         if len(self.gt_image_files) == 0:
             raise (RuntimeError("Found 0 images in the input files " + "\n"))
 
-        if config.MODE == 'test':
+        if self.evaluation:
             self.transform_opt = {'crop': False,
                                   'flip': False,
                                   'resize': config.DATA_TEST_SIZE,
-                                  'random_load_mask': True}
-            config.DATA_MASK_TYPE == 'from_file' if mask_file is not None else config.DATA_MASK_TYPE
+                                  'random_load_mask': False}
+            self.mask_type = 'from_file' if mask_file is not None else config.DATA_MASK_TYPE
         else:
             self.transform_opt = {'crop': config.DATA_CROP, 'flip': config.DATA_FLIP,
                                   'resize': config.DATA_TRAIN_SIZE, 'random_load_mask': True}
 
-        self.mask_type = config.DATA_MASK_TYPE
+        if not self.evaluation:
+            self.mask_type = config.DATA_MASK_TYPE
         # generate random rectangle mask
         if self.mask_type == 'random_bbox':
             self.mask_setting = config.DATA_RANDOM_BBOX_SETTING
@@ -51,17 +59,40 @@ class Dataset(data.Dataset):
         # read masks from files
         elif self.mask_type == 'from_file':
             self.mask_image_files = self.load_file_list(mask_file)
+            if not self.mask_image_files: raise ValueError('No mask files.')
+        if self.evaluation:
+            if self.mask_type != 'from_file':
+                raise ValueError('Formal evaluation requires saved masks for reproducible filtering.')
+            self._evaluation_indices=[]
+            self.evaluation_mask_groups=[]
+            for original_index,item in enumerate(self.gt_image_files):
+                # Geometry after image processing determines actual mask area.
+                image=load_medical_image(item,self.config)
+                if self.transform_opt['resize']:
+                    image=transFunc.resize(image,self.transform_opt['resize'])
+                mask=self.load_mask(original_index,torch.empty(1,image.height,image.width))
+                group=group_mask(mask[0].numpy())
+                if group is not None:
+                    self._evaluation_indices.append(original_index)
+                    self.evaluation_mask_groups.append(group)
+            if not self._evaluation_indices: raise ValueError('No evaluation masks in the 1%-60% range.')
 
     def __getitem__(self, index):
+        if not self.evaluation:
+            return self.load_item(index)
+        index = self._evaluation_indices[index]
+        # Preserve original image/mask pairing after exclusion.
+        np_state, py_state = np.random.get_state(), random.getstate()
+        np.random.seed((self.config.EVAL_MASK_SEED or 0) + index)
+        random.seed((self.config.EVAL_MASK_SEED or 0) + index)
         try:
-            item = self.load_item(index)
-        except:
-            print('loading error: ' + self.gt_image_files[index])
-            item = self.load_item(0)
-        return item
+            return self.load_item(index)
+        finally:
+            np.random.set_state(np_state)
+            random.setstate(py_state)
 
     def __len__(self):
-        return len(self.gt_image_files)
+        return len(self._evaluation_indices) if self._evaluation_indices is not None else len(self.gt_image_files)
 
     def load_file_list(self, flist):
         if isinstance(flist, list):
@@ -75,65 +106,44 @@ class Dataset(data.Dataset):
                 return flist
 
             if os.path.isfile(flist):
-                try:
-                    return np.genfromtxt(flist, dtype=np.str, encoding='utf-8')
-                except:
+                if flist.lower().endswith('.json'):
+                    return read_manifest(flist)
+                if flist.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff')):
                     return [flist]
+                return np.atleast_1d(np.genfromtxt(flist, dtype=str, encoding='utf-8')).tolist()
         return []
 
     def load_item(self, index):
-        gt_path = self.gt_image_files[index]
-        gt_image = loader(gt_path)
-
-        if self.model == 1:
-            structure_path = self.structure_image_files[index]
-            structure_image = loader(structure_path)
-            transform_param = get_params(gt_image.size, self.transform_opt)
-            gt_image, structure_image = transform_image(transform_param, gt_image, structure_image)
-            texture_image = torch.zeros_like(structure_image)
-
-        elif self.model == 2:
-            # load image
-            img = imread(self.gt_image_files[index])
-            if len(img.shape) < 3:
-                img_gray = copy.deepcopy(img)
+        gt_image = load_medical_image(self.gt_image_files[index], self.config)
+        if self.model in (1, 3):
+            if self.config.RTV_SOURCE == 'files':
+                if len(self.structure_image_files) != len(self.gt_image_files):
+                    raise ValueError('Structure file list must match the image list one-to-one.')
+                structure_image = loader(self.structure_image_files[index])
+                if structure_image.size != gt_image.size:
+                    raise ValueError('Cached RTV structure geometry differs from the source image.')
             else:
-                img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # gray to rgb
-            if len(img.shape) < 3:
-                img = gray2rgb(img)
-
-            texture_image = self.load_lbp(img_gray)
-            transform_param = get_params((256, 256), self.transform_opt)
-            img = Image.fromarray(img)
-            texture_image = Image.fromarray(texture_image)
-            texture_image = texture_image.convert('L')
-            gt_image, texture_image = transform_texture_image(transform_param, img, texture_image)
-            texture_image = texture_image[0, :, :].view(1, 256, 256)
-            structure_image = torch.zeros_like(texture_image)
-
+                structure_image = rtv_structure(gt_image, self.config.RTV_LAMBDA or .015,
+                                               self.config.RTV_SIGMA or 3, self.config.RTV_ITERATIONS or 30)
         else:
-            structure_path = self.structure_image_files[index]
-            structure_image = loader(structure_path)
-            transform_param = get_params(gt_image.size, self.transform_opt)
-            img = imread(self.gt_image_files[index])
-            if len(img.shape) < 3:
-                img_gray = copy.deepcopy(img)
-            else:
-                img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            if len(img.shape) < 3:
-                img = gray2rgb(img)
-            texture_image = self.load_lbp(img_gray)
-            img = Image.fromarray(img)
-            texture_image = Image.fromarray(texture_image)
-            texture_image = texture_image.convert('L')
-            gt_image, structure_image, texture_image = transform_all_image(transform_param, img, structure_image,
-                                                                           texture_image)
-
+            structure_image = Image.new('RGB', gt_image.size)
+        # Priors are extracted from the complete image before any mask is applied.
+        texture_image = Image.fromarray(self.load_lbp(np.asarray(gt_image.convert('L'))), mode='L')
+        params = get_params(gt_image.size, self.transform_opt)
+        images = []
+        for image, nearest in ((gt_image, False), (structure_image, False), (texture_image, True)):
+            if params['crop']:
+                x, y, w, h = params['crop']
+                image = image.crop((x, y, x+w, y+h))
+            if params['resize']:
+                image = transFunc.resize(image, params['resize'], interpolation=
+                                         InterpolationMode.NEAREST if nearest else InterpolationMode.BILINEAR)
+            if params['flip']:
+                image = transFunc.hflip(image)
+            images.append(transFunc.to_tensor(image))
+        gt_image, structure_image, texture_image = images
         mask = self.load_mask(index, gt_image)
-        input_image = gt_image * (1 - mask)
-
-        return input_image, structure_image, texture_image, gt_image, mask
+        return gt_image * (1-mask), structure_image, texture_image, gt_image, mask
 
     def load_mask(self, index, img):
         _, w, h = img.shape
@@ -159,8 +169,8 @@ class Dataset(data.Dataset):
                 # if random.random() > 0.5:
                 #     mask = transFunc.vflip(mask)
             else:
-                mask = gray_loader(self.mask_image_files[index])
-            mask = transFunc.resize(mask, size=image_shape)
+                mask = gray_loader(self.mask_image_files[index % len(self.mask_image_files)])
+            mask = transFunc.resize(mask, size=image_shape, interpolation=InterpolationMode.NEAREST)
             mask = transFunc.to_tensor(mask)
             mask = (mask > 0).float()
             return mask
@@ -168,8 +178,11 @@ class Dataset(data.Dataset):
             raise (RuntimeError("No such mask type: %s" % self.mask_type))
 
     def load_name(self, index, add_mask_name=False):
+        if self._evaluation_indices is not None: index=self._evaluation_indices[index]
         name = self.gt_image_files[index]
         # name = self.gt_image_files[index]
+        if isinstance(name, dict):
+            name = name.get('name', Path(name['path']).name.split('.')[0] + '_slice_' + str(name.get('slice_index', 0)) + '.png')
         name = os.path.basename(name)
 
         if not add_mask_name:
@@ -196,13 +209,16 @@ class Dataset(data.Dataset):
                 yield item
 
     def load_lbp(self, img_gray):
-        # 创建一个256*256*3的全0数组
-        img_lbp = np.zeros((256, 256, 3), np.uint8)
-        for i in range(0, 256):
-            for j in range(0, 256):
-                # 得到该点根据LBP算出的特征值
-                img_lbp[i, j, :] = self.lbp_calculated_pixel(img_gray, i, j)
-        return img_lbp
+        h, w = img_gray.shape
+        padded = np.pad(img_gray, 1, mode='constant')
+        valid = np.pad(np.ones((h, w), dtype=bool), 1, mode='constant')
+        out = np.zeros((h, w), dtype=np.uint8)
+        offsets = [(-1,1),(0,1),(1,1),(1,0),(1,-1),(0,-1),(-1,-1),(-1,0)]
+        for bit, (dy, dx) in enumerate(offsets):
+            neighbor = padded[1+dy:1+dy+h, 1+dx:1+dx+w]
+            inside = valid[1+dy:1+dy+h, 1+dx:1+dx+w]
+            out |= ((neighbor >= img_gray) & inside).astype(np.uint8) << bit
+        return out
 
     # lbp计算像素
     def lbp_calculated_pixel(self, img, x, y):
