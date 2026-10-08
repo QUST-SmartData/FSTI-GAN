@@ -171,7 +171,7 @@ class TextureFlow():
         iteration = 0
         psnr_list = []
 
-        # TODO: add fid score to evaluate
+        # Compute reconstruction metrics for the validation batches.
         with torch.no_grad():
             # for items in val_loader:
             for j, items in enumerate(val_loader):

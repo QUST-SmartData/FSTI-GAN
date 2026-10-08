@@ -25,7 +25,7 @@ from torchvision.transforms import InterpolationMode
 from utils.mask_group_split import group_mask
 
 
-## TODO: choose with or without transformation at test mode
+# Evaluation mode controls deterministic input preprocessing.
 class Dataset(data.Dataset):
     def __init__(self, gt_file, structure_file, config, mask_file=None, evaluation=False):
         self.config = config

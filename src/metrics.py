@@ -57,7 +57,7 @@ class FID():
 
         self.model = InceptionV3([block_idx])
         if self.cuda:
-            # TODO: put model into specific GPU
+            # Move the metric network to the input tensor device.
             self.model.cuda()
 
         print('calculate gt_path statistics...')

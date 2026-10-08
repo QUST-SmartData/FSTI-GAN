@@ -51,7 +51,7 @@ class FID():
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[self.dims]
         self.model = InceptionV3([block_idx])
         if self.cuda:
-            # TODO: put model into specific GPU
+            # Move the metric network to the input tensor device.
             self.model.cuda()
 
     def __call__(self, images, gt_path):

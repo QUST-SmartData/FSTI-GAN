@@ -610,7 +610,7 @@ class AdaptiveInstanceNorm2d(nn.Module):
         # weight and bias are dynamically assigned
         self.weight = None
         self.bias = None
-        # just dummy buffers, not used
+        # Registered statistics are expanded per instance in forward().
         self.register_buffer('running_mean', torch.zeros(num_features))
         self.register_buffer('running_var', torch.ones(num_features))
 

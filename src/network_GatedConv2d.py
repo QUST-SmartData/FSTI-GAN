@@ -738,7 +738,7 @@ class AdaptiveInstanceNorm2d(nn.Module):
         # weight and bias are dynamically assigned
         self.weight = None
         self.bias = None
-        # just dummy buffers, not used
+        # Registered statistics are expanded per instance in forward().
         self.register_buffer('running_mean', torch.zeros(num_features))
         self.register_buffer('running_var', torch.ones(num_features))
 
@@ -809,7 +809,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'none':
         norm_layer = None
     else:
-        raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
+        raise ValueError('Unknown normalization layer: %s' % norm_type)
     return norm_layer
 
 

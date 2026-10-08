@@ -74,7 +74,7 @@ class BaseModel(nn.Module):
         elif self.config.LR_POLICY == 'cosine':
             scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=int(self.config.MAX_ITERS), eta_min=0.0)
         else:
-            raise NotImplementedError('learning rate policy [%s] is not implemented', self.config.LR_POLICY)
+            raise ValueError('Unknown learning rate policy: %s. Choose constant, step, or cosine.' % self.config.LR_POLICY)
         return scheduler
 
 
